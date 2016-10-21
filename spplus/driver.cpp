@@ -9,7 +9,6 @@
 //#include <tsan/rtl/tsan_interface.h>
 //#include <tsan/rtl/tsan_interface_atomic.h>
 #include <unistd.h>
-#include <cilk/hyperobject_base.h>
 
 // runtime internal abi
 #include <internal/abi.h>
@@ -18,6 +17,7 @@
 #include "debug_util.h"
 #include "mem_access.h"
 #include "stack.h"
+
 
 // HACK --- only works for linux jmpbuf
 #define GET_RSP(sf) ((uint64_t) sf->ctx[2])
@@ -40,6 +40,7 @@ static bool TOOL_INITIALIZED = false;
 static bool instrumentation = false;
 // needs to be reentrant due to reducer operations; 0 means checking
 static int checking_disabled = 0;
+
 
 static inline void enable_instrumentation() {
   DBG_TRACE(DEBUG_BASIC, "Enable instrumentation.\n");
@@ -85,15 +86,13 @@ static inline bool should_check() {
 extern "C" void cilk_spawn_prepare() {
   disable_checking();
   cilksan_assert(last_event == NONE);
-  WHEN_CILKSAN_DEBUG(last_event = SPAWN_PREPARE);
+  WHEN_CILKSAN_DEBUG( last_event = SPAWN_PREPARE; ) 
 }
 
 extern "C" void cilk_spawn_or_continue(int in_continuation) {
-  // cilksan_assert( (!in_continuation && last_event == SPAWN_PREPARE) 
-  //                      || (in_continuation && last_event == RUNTIME_LOOP) );
-  if (in_continuation && last_event == LEAVE_FRAME_OR_HELPER)
-    cilksan_do_leave_end();
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
+  cilksan_assert( (!in_continuation && last_event == SPAWN_PREPARE) 
+                       || (in_continuation && last_event == RUNTIME_LOOP) );
+  WHEN_CILKSAN_DEBUG( last_event = NONE; ) 
   enable_checking();
 }
 
@@ -118,12 +117,12 @@ cilk_enter_end(__cilkrts_stack_frame *sf, void *rsp) {
   static bool first_call = true;
 
   if(__builtin_expect(first_call, 0)) {
-    cilksan_do_enter_end(sf->worker, (uintptr_t)rsp);
+    cilksan_do_enter_end(sf->worker, (uint64_t)rsp);
     first_call = false;
     // turn on instrumentation now
     enable_instrumentation();
   } else {
-    cilksan_do_enter_end(NULL, (uintptr_t)rsp);
+    cilksan_do_enter_end(NULL, (uint64_t)rsp);
   }
   enable_checking();
 }
@@ -177,74 +176,63 @@ extern "C" void cilk_leave_end() {
 
 // called upon process exit
 static void tsan_destroy(void) {
-  // fprintf(err_io, "tsan_destroy called.\n");
-  cilksan_deinit();
+    // fprintf(err_io, "tsan_destroy called.\n");
+    cilksan_deinit();
 
-  fflush(stdout);
-  delete_proc_maps();
+    fflush(stdout);
+    delete_proc_maps();
 }
 
 static void init_internal() {
-  read_proc_maps();
-  if (ERROR_FILE) {
-    FILE *tmp = fopen(ERROR_FILE, "w+");
-    if(tmp) err_io = tmp;
-  }
-  if (err_io == NULL) err_io = stderr;
+    read_proc_maps();
+    if (ERROR_FILE) {
+        FILE *tmp = fopen(ERROR_FILE, "w+");
+        if(tmp) err_io = tmp;
+    }
+    if (err_io == NULL) err_io = stderr;
 
-  char *e = getenv("CILK_NWORKERS");
-  if (!e || 0!=strcmp(e, "1")) {
-    // fprintf(err_io, "Setting CILK_NWORKERS to be 1\n");
-    if( setenv("CILK_NWORKERS", "1", 1) ) {
-      fprintf(err_io, "Error setting CILK_NWORKERS to be 1\n");
-      exit(1);
+    char *e = getenv("CILK_NWORKERS");
+    if (!e || 0!=strcmp(e, "1")) {
+        // fprintf(err_io, "Setting CILK_NWORKERS to be 1\n");
+        if( setenv("CILK_NWORKERS", "1", 1) ) {
+            fprintf(err_io, "Error setting CILK_NWORKERS to be 1\n");
+            exit(1);
+        }
     }
-  }
-  // Force reductions.
-  // XXX: Does not work with SP+ algorithm, but works with ordinary
-  // SP bags.
-  e = getenv("CILK_FORCE_REDUCE");
-  if (!e || 0!=strcmp(e, "1")) {
-    // fprintf(err_io, "Setting CILK_FORCE_REDUCE to be 1\n");
-    if( setenv("CILK_FORCE_REDUCE", "1", 1) ) {
-      fprintf(err_io, "Error setting CILK_FORCE_REDUCE to be 1\n");
-      exit(1);
-    }
-  }
 }
 
 extern "C" void __tsan_init() {
-  // kind of a hack, but sometimes __tsan_init gets called twice ...
-  if(TOOL_INITIALIZED) return;
+    // kind of a hack, but sometimes __tsan_init gets called twice ...
+    if(TOOL_INITIALIZED) return;
 
-  atexit(tsan_destroy);
-  init_internal();
-  // moved this later when we enter the first Cilk frame
-  // cilksan_init();
-  // enable_instrumentation();
-  TOOL_INITIALIZED = true;
-  // fprintf(err_io, "tsan_init called.\n");
+    atexit(tsan_destroy);
+    init_internal();
+    // moved this later when we enter the first Cilk frame
+    // cilksan_init();
+    // enable_instrumentation();
+    TOOL_INITIALIZED = true;
+    // fprintf(err_io, "tsan_init called.\n");
 }
 
 // invoked whenever a function enters; no need for this
 extern "C" void __tsan_func_entry(void *pc) { 
-  //TODO remove this when it functions in the future
-  __tsan_init();
-  cilksan_assert(TOOL_INITIALIZED);
-  // DBG_TRACE(DEBUG_BASIC, "%s rip %p frame addr = %p\n", 
-  //           __FUNCTION__, pc, __builtin_frame_address(0));
-  // XXX Let's focus on Cilk function for now; maybe put it back later
-  // cilksan_do_function_entry((uint64_t)__builtin_frame_address(0));
+    //TODO remove this when it functions in the future
+    __tsan_init();
+    cilksan_assert(TOOL_INITIALIZED);
+    // DBG_TRACE(DEBUG_BASIC, "%s rip %p frame addr = %p\n", 
+    //           __FUNCTION__, pc, __builtin_frame_address(0));
+    // XXX Let's focus on Cilk function for now; maybe put it back later
+    // cilksan_do_function_entry((uint64_t)__builtin_frame_address(0));
 }
 
 extern "C" void __tsan_func_exit() {
-  cilksan_assert(TOOL_INITIALIZED);
-  // XXX Let's focus on Cilk function for now; maybe put it back later
-  // cilksan_do_function_exit();
+    cilksan_assert(TOOL_INITIALIZED);
+    // XXX Let's focus on Cilk function for now; maybe put it back later
+    // cilksan_do_function_exit();
 }
 
 extern "C" void __tsan_vptr_update(void **vptr_p, void *new_val) {
-  // XXX: Not doing anything at the moment.
+    // XXX: Not doing anything at the moment.
 }
 
 // get_user_code_rip calls the system backtrace to walk the stack to obtain 
@@ -254,14 +242,14 @@ extern "C" void __tsan_vptr_update(void **vptr_p, void *new_val) {
 // depends on how deeply the backtrace call is nested, which is provided
 // as an arg to get_user_code_rip. 
 /*
-  static inline void *get_user_code_rip(int depth) {
-  disable_checking();
-  void *buffer[depth];
-  int res = backtrace(buffer, depth);
-  cilksan_assert(res == depth);
-  enable_checking();
-  return buffer[depth-1];
-  } */
+static inline void *get_user_code_rip(int depth) {
+    disable_checking();
+    void *buffer[depth];
+    int res = backtrace(buffer, depth);
+    cilksan_assert(res == depth);
+    enable_checking();
+    return buffer[depth-1];
+} */
 
 // Assuming tsan_read/write is inlined, the stack should look like this:
 //
@@ -278,118 +266,71 @@ extern "C" void __tsan_vptr_update(void **vptr_p, void *new_val) {
 // right before the corresponding read / write in the user code.
 // the return addr of __tsan_read/write[1-16] is the rip for the read / write
 static inline void tsan_read(void *addr, size_t size, void *rip) {
-  cilksan_assert(TOOL_INITIALIZED);
-  if(should_check()) {
-    disable_checking();
-    DBG_TRACE(DEBUG_MEMORY, "%s read %p\n", __FUNCTION__, addr);
-    cilksan_do_read((uint64_t)rip, (uint64_t)addr, size);
-    enable_checking();
-  } else {
-    DBG_TRACE(DEBUG_MEMORY, "SKIP %s read %p\n", __FUNCTION__, addr);
-  }
+    cilksan_assert(TOOL_INITIALIZED);
+    if(should_check()) {
+        disable_checking();
+        DBG_TRACE(DEBUG_MEMORY, "%s read %p\n", __FUNCTION__, addr);
+        cilksan_do_read((uint64_t)rip, (uint64_t)addr, size);
+        enable_checking();
+    } else {
+        DBG_TRACE(DEBUG_MEMORY, "SKIP %s read %p\n", __FUNCTION__, addr);
+    }
 }
 
 static inline void tsan_write(void *addr, size_t size, void *rip) {
-  cilksan_assert(TOOL_INITIALIZED);
-  if(should_check()) {
-    disable_checking();
-    DBG_TRACE(DEBUG_MEMORY, "%s wrote %p\n", __FUNCTION__, addr);
-    cilksan_do_write((uint64_t)rip, (uint64_t)addr, size);
-    enable_checking();
-  } else {
-    DBG_TRACE(DEBUG_MEMORY, "SKIP %s wrote %p\n", __FUNCTION__, addr);
-  }
+    cilksan_assert(TOOL_INITIALIZED);
+    if(should_check()) {
+        disable_checking();
+        DBG_TRACE(DEBUG_MEMORY, "%s wrote %p\n", __FUNCTION__, addr);
+        cilksan_do_write((uint64_t)rip, (uint64_t)addr, size);
+        enable_checking();
+    } else {
+        DBG_TRACE(DEBUG_MEMORY, "SKIP %s wrote %p\n", __FUNCTION__, addr);
+    }
 }
 
 extern "C" void __tsan_vptr_read(void **vptr_p) {
-  return;
+    return;
 }
 
 extern "C" void __tsan_read1(void *addr) {
-  tsan_read(addr, 1, __builtin_return_address(0));
+    tsan_read(addr, 1, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_read2(void *addr) {
-  tsan_read(addr, 2, __builtin_return_address(0));
+    tsan_read(addr, 2, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_read4(void *addr) {
-  tsan_read(addr, 4, __builtin_return_address(0));
+    tsan_read(addr, 4, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_read8(void *addr) {
-  tsan_read(addr, 8, __builtin_return_address(0));
+    tsan_read(addr, 8, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_read16(void *addr) {
-  tsan_read(addr, 16, __builtin_return_address(0));
+    tsan_read(addr, 16, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_write1(void *addr) {
-  tsan_write(addr, 1, __builtin_return_address(0));
+    tsan_write(addr, 1, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_write2(void *addr) {
-  tsan_write(addr, 2, __builtin_return_address(0));
+    tsan_write(addr, 2, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_write4(void *addr) {
-  tsan_write(addr, 4, __builtin_return_address(0));
+    tsan_write(addr, 4, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_write8(void *addr) {
-  tsan_write(addr, 8, __builtin_return_address(0));
+    tsan_write(addr, 8, __builtin_return_address(0));
 }
 
 extern "C" void __tsan_write16(void *addr) {
-  tsan_write(addr, 16, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_read1(void *addr) {
-  tsan_read(addr, 1, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_read2(void *addr) {
-  tsan_read(addr, 2, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_read4(void *addr) {
-  tsan_read(addr, 4, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_read8(void *addr) {
-  tsan_read(addr, 8, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_read16(void *addr) {
-  tsan_read(addr, 16, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_write1(void *addr) {
-  tsan_write(addr, 1, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_write2(void *addr) {
-  tsan_write(addr, 2, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_write4(void *addr) {
-  tsan_write(addr, 4, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_write8(void *addr) {
-  tsan_write(addr, 8, __builtin_return_address(0));
-}
-
-extern "C" void __tsan_unaligned_write16(void *addr) {
-  tsan_write(addr, 16, __builtin_return_address(0));
-}
-
-extern "C" __tsan_atomic8
-__tsan_atomic8_compare_exchange_val(volatile __tsan_atomic8 *a, __tsan_atomic8 c, __tsan_atomic8 v,
-				    __tsan_memory_order mo, __tsan_memory_order fail_mo) {
-  tsan_write((void*)a, 8, __builtin_return_address(0));
-  return __sync_val_compare_and_swap(a, c, v);
+    tsan_write(addr, 16, __builtin_return_address(0));
 }
 
 typedef void*(*malloc_t)(size_t);
@@ -397,25 +338,25 @@ static malloc_t real_malloc = NULL;
 
 extern "C" void* malloc(size_t s) {
 
-  // make it 8-byte aligned; easier to erase from shadow mem
-  uint64_t new_size = ALIGN_BY_NEXT_MAX_GRAIN_SIZE(s);
+    // make it 8-byte aligned; easier to erase from shadow mem
+    uint64_t new_size = ALIGN_BY_NEXT_MAX_GRAIN_SIZE(s);
 
-  // Don't try to init, since that needs malloc.  
-  if (real_malloc==NULL) {
-    real_malloc = (malloc_t)dlsym(RTLD_NEXT, "malloc");
-    char *error = dlerror();
-    if (error != NULL) {
-      fputs(error, err_io);
-      fflush(err_io);
-      abort();
+    // Don't try to init, since that needs malloc.  
+    if (real_malloc==NULL) {
+        real_malloc = (malloc_t)dlsym(RTLD_NEXT, "malloc");
+        char *error = dlerror();
+        if (error != NULL) {
+            fputs(error, err_io);
+            fflush(err_io);
+            abort();
+        }
     }
-  }
-  void *r = real_malloc(new_size);
+    void *r = real_malloc(new_size);
 
-  if(TOOL_INITIALIZED && should_check()) {
-    // cilksan_clear_shadow_memory((size_t)r, (size_t)r+malloc_usable_size(r)-1);
-    cilksan_clear_shadow_memory((size_t)r, (size_t)r+new_size);
-  }
+    if(TOOL_INITIALIZED && should_check()) {
+        // cilksan_clear_shadow_memory((size_t)r, (size_t)r+malloc_usable_size(r)-1);
+        cilksan_clear_shadow_memory((size_t)r, (size_t)r+new_size);
+    }
 
-  return r;
+    return r;
 }

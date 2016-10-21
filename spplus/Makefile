@@ -1,7 +1,6 @@
-#BASENAME ?= $(shell basename $(CURDIR))
-BASENAME = cilksan
+BASENAME ?= $(shell basename $(CURDIR))
 
-LIB_DIR = ../lib
+LIB_DIR = ../lib/
 INCLUDE_DIR = ../include
 
 .PHONY : default clean

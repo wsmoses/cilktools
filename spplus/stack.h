@@ -70,8 +70,8 @@ public:
    * Default constructor.
    */
   Stack_t() :
-    _capacity(DEFAULT_CAPACITY),
-    _head(0)
+    _head(0),
+    _capacity(DEFAULT_CAPACITY)
   { _stack = new STACK_DATA_T[_capacity]; }
 
   /*

@@ -25,15 +25,21 @@ enum debug_levels {
 
 #if CILKSAN_DEBUG
 //static int debug_level = DEBUG_BAGS | DEBUG_CALLBACK | DEBUG_MEMORY | DEBUG_DEQUE | DEBUG_REDUCER;
-//static int debug_level = DEBUG_BAGS |  DEBUG_CALLBACK;
-static int debug_level = 0;
+static int debug_level = DEBUG_REDUCER;
 #else
 static int debug_level = 0;
 #endif
 
 
+/* deprecated
+#define ERR_EXIT_CODE (-1)
+#define RW_RACE_EXIT_CODE 1
+#define WW_RACE_EXIT_CODE 2
+#define WR_RACE_EXIT_CODE 3
+*/
+
 #if CILKSAN_DEBUG
-#define WHEN_CILKSAN_DEBUG(stmt) do { stmt; } while(0)
+#define WHEN_CILKSAN_DEBUG(stmt) do { stmt } while(0);
 #define cilksan_assert(c) \
     do { if (!(c)) { die("%s:%d assertion failure: %s\n", \
                         __FILE__, __LINE__, #c);} } while (0) 

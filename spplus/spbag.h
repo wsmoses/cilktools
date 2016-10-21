@@ -26,6 +26,7 @@ public:
   virtual bool is_SBag() = 0;
   virtual bool is_PBag() = 0;
   virtual uint64_t get_func_id() = 0;
+  virtual uint64_t get_view_id() = 0;
   virtual uint64_t get_rsp() = 0;
   virtual void set_rsp(uint64_t stack_ptr) = 0;
   // virtual std::string get_call_context() = 0;
@@ -35,20 +36,22 @@ public:
 class SBag_t : public SPBagInterface {
 private:
   uint64_t _func_id;
+  uint64_t _view_id;
   // std::string _func_name;
   // SBag of the parent function (whether this function is called or spawned) 
-  // SPBagInterface *_parent;
+  SPBagInterface *_parent;
   uint64_t _stack_ptr;
 
   SBag_t() {} // disable default constructor
 
 public: 
   SBag_t(uint64_t id, SPBagInterface *parent) :
-      _func_id(id),
+      _func_id(id), _view_id(UNINIT_VIEW_ID),
       // _func_name(name),
-      // _parent(parent),
+      _parent(parent),
       _stack_ptr(UNINIT_STACK_PTR) { 
-    WHEN_CILKSAN_DEBUG(debug_count++);
+
+    WHEN_CILKSAN_DEBUG( debug_count++; )
   }
 
 #if CILKSAN_DEBUG
@@ -62,6 +65,7 @@ public:
   bool is_PBag() { return false; }
 
   uint64_t get_func_id() { return _func_id; }
+  uint64_t get_view_id() { /*racedetector_assert(0);*/ return _view_id; }
 
   uint64_t get_rsp() { 
     cilksan_assert(_stack_ptr != UNINIT_STACK_PTR); 
@@ -93,13 +97,16 @@ class PBag_t : public SPBagInterface {
 private:
   // the SBag that corresponds to the function instance that holds this PBag
   SPBagInterface *_sib_sbag;
+  // each PBag needs its own distinct _view_id
+  uint64_t _view_id;
+  // eventually will need to contain a vector of 
 
   PBag_t() {} // disable default constructor
 
 public: 
-  PBag_t(SPBagInterface *sib) :
-    _sib_sbag(sib) {
-    WHEN_CILKSAN_DEBUG( debug_count++; );
+  PBag_t(SPBagInterface *sib, uint64_t view_id) :
+    _sib_sbag(sib), _view_id(view_id) {
+    WHEN_CILKSAN_DEBUG( debug_count++; )
   }
 
 #if CILKSAN_DEBUG
@@ -112,6 +119,7 @@ public:
   bool is_SBag() { return false; }
   bool is_PBag() { return true; }
   uint64_t get_func_id() { return _sib_sbag->get_func_id(); } 
+  uint64_t get_view_id() { return _view_id; }
   uint64_t get_rsp() { return _sib_sbag->get_rsp(); }
   void set_rsp(uint64_t stack_ptr) { cilksan_assert(0); /* Should never happen; */ }
 
