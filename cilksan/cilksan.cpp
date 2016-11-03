@@ -724,7 +724,6 @@ void cilksan_clear_shadow_memory(size_t start, size_t end) {
     // DBG_TRACE(DEBUG_MEMORY, "Erasing mem %p.\n", (void *)start);
     if (shadow_mem.count(key)) {
       MemAccessList_t *acc = shadow_mem.find(key)->second;
-      fprintf(stderr, "clearing %lx\n", key);
       // Calling erase does not appear to invoke the destructor, so we call it
       // ourselves.
       delete acc;

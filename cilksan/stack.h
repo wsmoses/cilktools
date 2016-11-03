@@ -45,7 +45,7 @@ private:
     uint32_t copy_end = _capacity > new_capacity ? new_capacity : _capacity;
 
     // Copy contents of old call stack
-    for (int i = 0; i < copy_end; ++i) {
+    for (uint32_t i = 0; i < copy_end; ++i) {
       _stack[i] = old_stack[i];
     }
     _capacity = new_capacity;

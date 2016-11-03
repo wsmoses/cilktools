@@ -12,6 +12,8 @@
 
 extern List_t disjoint_set_list;
 
+static int64_t DS_ID = 0;
+
 template <typename DISJOINTSET_DATA_T>
 class DisjointSet_t {
 private:
@@ -31,9 +33,6 @@ private:
   bool _destructing;
 
   void assert_not_freed() {
-    if (!(_destructing || _ref_count >= 0))
-      // fprintf(stderr, "%p->assert_not_freed(): _destructing = %d, _ref_count = %ld\n",
-      // 	      this, _destructing, _ref_count);
     cilksan_assert(_destructing || _ref_count >= 0);
   }
 
@@ -45,7 +44,7 @@ private:
   __attribute__((always_inline))
   void swap_set_node_with(DisjointSet_t *that) {
     assert_not_freed();
-
+    that->assert_not_freed();
     DISJOINTSET_DATA_T tmp;
     tmp = this->_set_node;
     this->_set_node = that->_set_node;
@@ -54,8 +53,6 @@ private:
 
   // Frees the old parent if it has no more references.
   void set_parent(DisjointSet_t *that) {
-    // fprintf(stderr, "%p->set_parent(%p), _destructing = %d, _ref_count = %ld\n",
-    // 	    this, that, _destructing, _ref_count);
     assert_not_freed();
 
     DisjointSet_t *old_parent = this->_set_parent;
@@ -68,9 +65,9 @@ private:
     // before setting this's parent and we had another reference besides the
     // parent relationship, dec_ref_count would incorrectly believe that this's
     // only reference is in having itself as a parent.
-    if (old_parent != NULL) {
-      old_parent->dec_ref_count();
-    }
+    assert(old_parent != NULL);
+
+    old_parent->dec_ref_count();
   }
 
   /*
@@ -81,7 +78,6 @@ private:
    */
   __attribute__((always_inline))
   void link(DisjointSet_t *that) {
-    // fprintf(stderr, "%p->link(%p)\n", this, that);
     assert_not_freed();
     cilksan_assert(that != NULL);
 
@@ -107,11 +103,13 @@ private:
    */
   __attribute__((always_inline))
   DisjointSet_t* find_set() {
-    // fprintf(stderr, "%p->find_set()\n", this);
     assert_not_freed();
 
+    cilksan_assert(!_destructing);
     disjoint_set_list.lock();
     DisjointSet_t *node = this;
+
+    int64_t tmp_ref_count = _ref_count;
 
     node->assert_not_freed();
 
@@ -123,6 +121,8 @@ private:
       }
       node = node->_set_parent;
     }
+
+    cilksan_assert(tmp_ref_count == _ref_count);
 
     // node is now the root. Perform path compression by updating the parents
     // of each of the nodes we saw.
@@ -140,15 +140,18 @@ private:
   }
 
 public:
+  int64_t _ID;
+
   DisjointSet_t(DISJOINTSET_DATA_T node) :
       _node(node),
       _set_node(node),
       _set_parent(NULL),
       _rank(0),
       _ref_count(0),
-      _destructing(false) { 
-    // fprintf(stderr, "Constructing %p\n", this);
-    set_parent(this);
+      _destructing(false),
+      _ID(DS_ID++) { 
+    this->_set_parent = this;
+    this->inc_ref_count();
     WHEN_CILKSAN_DEBUG(debug_count++);
   }
 
@@ -160,7 +163,6 @@ public:
   static void (*dtor_callback)(DisjointSet_t *);
 
   ~DisjointSet_t() {
-    // fprintf(stderr, "Destructing %p\n", this);
     _destructing = true;
     dtor_callback(this);
     if (this->_set_parent != this) {
@@ -180,7 +182,6 @@ public:
   // Decrements the ref count.  Returns true if the node was deleted
   // as a result.
   inline void dec_ref_count() {
-    // fprintf(stderr, "%p->dec_ref_count(), _ref_count = %ld\n", this, _ref_count);
     assert_not_freed();
 
     --_ref_count;
@@ -190,7 +191,6 @@ public:
   }
 
   inline void inc_ref_count() {
-    // fprintf(stderr, "%p->inc_ref_count(), _ref_count = %ld\n", this, _ref_count);
     assert_not_freed();
 
     ++_ref_count;
@@ -210,6 +210,13 @@ public:
     return find_set()->_set_node;
   }
 
+  __attribute__((always_inline))
+  DISJOINTSET_DATA_T get_my_set_node() {
+    assert_not_freed();
+
+    return _set_node;
+  }
+
   /*
    * Unions this disjoint set and that disjoint set.
    *
@@ -224,7 +231,6 @@ public:
    */
   // Called "combine," because "union" is a reserved keyword in C
   void combine(DisjointSet_t *that) {
-    // fprintf(stderr, "%p->combine(%p)\n", this, that);
     assert_not_freed();
 
     cilksan_assert(that);

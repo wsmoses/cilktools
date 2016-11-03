@@ -28,7 +28,7 @@ static const int gtype_to_mem_size[4] = { 1, 2, 4, 8 };
 
 // check if addr is aligned with the granularity represented by gtype
 #define IS_ALIGNED_WITH_GTYPE(addr, gtype) \
-  ((addr & (uint64_t)gtype_to_mem_size[gtype]-1) == 0)
+  ((addr & ((uint64_t)gtype_to_mem_size[gtype]-1)) == 0)
 
 // Struct to hold a pair of disjoint sets corresponding to the last reader and writer
 typedef struct MemAccess_t {

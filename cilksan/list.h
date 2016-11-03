@@ -30,26 +30,26 @@
 #include "debug_util.h"
 
 class List_t {
- private:
+private:
   const int _DEFAULT_CAPACITY = 128;
 
   int _length = 0;
   void **_list = NULL;
-  #if CILKSAN_DEBUG
+#if CILKSAN_DEBUG
   bool _locked = false;
-  #endif
+#endif
   int _capacity = 0;
 
- public:
- List_t() :
-  _length(0),
-    #if CILKSAN_DEBUG
-    _locked(false),
-    #endif
-    _capacity(_DEFAULT_CAPACITY) {
+public:
+  List_t() :
+      _length(0),
+#if CILKSAN_DEBUG
+      _locked(false),
+#endif
+      _capacity(_DEFAULT_CAPACITY) {
 
-      _list = (void**)malloc(_capacity * sizeof(void*));
-    }
+    _list = (void**)malloc(_capacity * sizeof(void*));
+  }
 
   // Returns a pointer to the first element in the list. Elements are stored
   // contiguously.
@@ -59,36 +59,36 @@ class List_t {
   // The ordering of the elements will not be changed, even if the result
   // changes.
   __attribute__((always_inline))
-    void **list() { return _list; }
+  void **list() { return _list; }
 
   // The length of the list. Automically reset to 0 on unlock().
   __attribute__((always_inline))
-    int length() { return _length; }
+  int length() { return _length; }
 
   // Crashes the program if lock() is called a second time before unlock().
   __attribute__((always_inline))
-    void lock() {
+  void lock() {
     cilksan_assert(!_locked);
 
-    #if CILKSAN_DEBUG
+#if CILKSAN_DEBUG
     _locked = true;
-    #endif
+#endif
   }
 
   __attribute__((always_inline))
-    void unlock() {
+  void unlock() {
     cilksan_assert(_locked);
 
-    #if CILKSAN_DEBUG
+#if CILKSAN_DEBUG
     _locked = false;
-    #endif
+#endif
     _length = 0;
   }
 
   // Reclaims any memory used by the list. Should be called at the end of the
   // program.
   __attribute__((always_inline))
-    void free_list() {
+  void free_list() {
     cilksan_assert(!_locked);
 
     if (_list != NULL)
@@ -97,7 +97,7 @@ class List_t {
 
   // Adds an element to the end of the list.
   __attribute__((always_inline))
-    void push(void *obj) {
+  void push(void *obj) {
     cilksan_assert(_locked);
 
     if (__builtin_expect(_length == _capacity, 0)) {
