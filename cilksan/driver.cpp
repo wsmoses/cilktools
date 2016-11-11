@@ -78,8 +78,13 @@ extern "C" void __cilksan_disable_checking() {
   DBG_TRACE(DEBUG_BASIC, "External disable checking (%d).\n", checking_disabled);
 }
 
+// Non-inlined callback for user code to check if checking is enabled.
+extern "C" bool __cilksan_is_checking_enabled() {
+  return (checking_disabled == 0);
+}
+
 static inline bool should_check() {
-  return(instrumentation && checking_disabled == 0); 
+  return (instrumentation && checking_disabled == 0);
 }
 
 extern "C" void cilk_spawn_prepare() {
@@ -401,7 +406,7 @@ extern "C" void* malloc(size_t s) {
   uint64_t new_size = ALIGN_BY_NEXT_MAX_GRAIN_SIZE(s);
 
   // Don't try to init, since that needs malloc.  
-  if (real_malloc==NULL) {
+  if (real_malloc == NULL) {
     real_malloc = (malloc_t)dlsym(RTLD_NEXT, "malloc");
     char *error = dlerror();
     if (error != NULL) {

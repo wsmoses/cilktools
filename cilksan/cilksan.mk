@@ -11,8 +11,8 @@ LDFLAGS += $(TOOL_LDFLAGS)
 LDLIBS += $(TOOL_LDLIBS)
 
 ifeq ($(COMPILER),LLVM)
-COMPILER_RT_DIR=$(COMPILER_ROOT)/src/projects/compiler-rt
-CILKSAN_CFLAGS += -I$(COMPILER_RT_DIR)/lib/ -I$(COMPILER_RT_DIR)/lib/cilk/include
+# COMPILER_RT_DIR=$(COMPILER_ROOT)/src/projects/compiler-rt
+# CILKSAN_CFLAGS += -I$(COMPILER_RT_DIR)/lib/ -I$(COMPILER_RT_DIR)/lib/cilk/include
 CILKSAN_CXXFLAGS += $(LIB_CFLAGS) -O3
 # else ifeq ($(COMPILER),GCC)
 # COMPILER_ROOT = $(COMPILERS_HOME)/gcc-cilksan
