@@ -1,10 +1,29 @@
 # -*- mode: makefile-gmake; -*-
 
-COMPILER ?= LLVM
-#COMPILER ?= GCC
-
 CC = gcc
 CXX = g++
+
+# User-local Makefile configuration.  For example, this file should
+# contain the following:
+#
+# CC = /path/to/my/cc
+# CXX = /path/to/my/c++
+#
+# Do not commit this file to the repository.
+-include $(INCLUDE_DIR)/myconfig.mk
+
+#COMPILER = LLVM
+#COMPILER = GCC
+
+ifeq ($(COMPILER),LLVM)
+CC = clang
+CXX = clang++
+else ifeq ($(COMPILER),GCC)
+CC = gcc
+CXX = g++
+#APP_CFLAGS += -fcilktool
+endif
+
 BASIC_CFLAGS = -O1 -Wall -g
 BASIC_CXXFLAGS = $(BASIC_CFLAGS)
 CFLAGS = $(BASIC_CFLAGS) -std=gnu11 -I $(INCLUDE_DIR)
@@ -19,18 +38,6 @@ TOOL_LDLIBS =
 APP_CFLAGS = -fcilkplus
 APP_LDFLAGS =
 APP_LDLIBS = -l:libcilkrts.a -lpthread -ldl
-
-ifeq ($(COMPILER),LLVM)
-COMPILER_ROOT = ~/git/Parallel-IR
-CC = $(COMPILER_ROOT)/build/bin/clang
-CXX = $(COMPILER_ROOT)/build/bin/clang++
-else ifeq ($(COMPILER),GCC)
-#COMPILER_ROOT = $(COMPILERS_HOME)/gcc-supertech
-COMPILER_ROOT = $(COMPILERS_HOME)/gcc
-CC = gcc
-CXX = g++
-#APP_CFLAGS += -fcilktool
-endif
 
 ## Each C source file will have a corresponding file of prerequisites.
 ## Include the prerequisites for each of our C source files.
