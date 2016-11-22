@@ -391,9 +391,51 @@ extern "C" void __tsan_unaligned_write16(void *addr) {
 }
 
 extern "C" __tsan_atomic8
+__tsan_atomic8_fetch_add(volatile __tsan_atomic8 *a, __tsan_atomic8 c,
+                         __tsan_memory_order mo) {
+  tsan_write((void*)a, 8, __builtin_return_address(0));
+  return __sync_fetch_and_add(a, c);
+}
+
+extern "C" __tsan_atomic16
+__tsan_atomic16_fetch_add(volatile __tsan_atomic16 *a, __tsan_atomic16 c,
+                         __tsan_memory_order mo) {
+  tsan_write((void*)a, 16, __builtin_return_address(0));
+  return __sync_fetch_and_add(a, c);
+}
+
+extern "C" __tsan_atomic32
+__tsan_atomic32_fetch_add(volatile __tsan_atomic32 *a, __tsan_atomic32 c,
+                         __tsan_memory_order mo) {
+  tsan_write((void*)a, 32, __builtin_return_address(0));
+  return __sync_fetch_and_add(a, c);
+}
+
+extern "C" __tsan_atomic64
+__tsan_atomic64_fetch_add(volatile __tsan_atomic64 *a, __tsan_atomic64 c,
+                         __tsan_memory_order mo) {
+  tsan_write((void*)a, 64, __builtin_return_address(0));
+  return __sync_fetch_and_add(a, c);
+}
+
+extern "C" __tsan_atomic8
 __tsan_atomic8_compare_exchange_val(volatile __tsan_atomic8 *a, __tsan_atomic8 c, __tsan_atomic8 v,
 				    __tsan_memory_order mo, __tsan_memory_order fail_mo) {
   tsan_write((void*)a, 8, __builtin_return_address(0));
+  return __sync_val_compare_and_swap(a, c, v);
+}
+
+extern "C" __tsan_atomic16
+__tsan_atomic16_compare_exchange_val(volatile __tsan_atomic16 *a, __tsan_atomic16 c, __tsan_atomic16 v,
+				    __tsan_memory_order mo, __tsan_memory_order fail_mo) {
+  tsan_write((void*)a, 16, __builtin_return_address(0));
+  return __sync_val_compare_and_swap(a, c, v);
+}
+
+extern "C" __tsan_atomic32
+__tsan_atomic32_compare_exchange_val(volatile __tsan_atomic32 *a, __tsan_atomic32 c, __tsan_atomic32 v,
+				    __tsan_memory_order mo, __tsan_memory_order fail_mo) {
+  tsan_write((void*)a, 32, __builtin_return_address(0));
   return __sync_val_compare_and_swap(a, c, v);
 }
 
