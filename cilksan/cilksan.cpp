@@ -518,7 +518,7 @@ void cilksan_do_detach_end() {
   cilksan_assert(CILKSAN_INITIALIZED);
   DBG_TRACE(DEBUG_CALLBACK, "cilk_detach\n");
 
-  cilksan_assert(frame_stack.head()->frame_data.entry_type == HELPER);
+  // cilksan_assert(frame_stack.head()->frame_data.entry_type == HELPER);
   cilksan_assert(last_event == DETACH);
   WHEN_CILKSAN_DEBUG(last_event = NONE);
 
